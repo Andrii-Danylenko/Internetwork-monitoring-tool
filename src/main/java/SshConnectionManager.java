@@ -16,7 +16,9 @@ public class SshConnectionManager {
     private final String username;
     private final String password;
     private final String hostname;
-    private static final long TIMEOUT = 1000;
+    // Тайм-аут соединения
+    // TODO: сделать его динамическим (user-defined)
+    private static final long TIMEOUT = 1000L;
 
     public SshConnectionManager(String username, String password, String hostname) {
         this.username = username;
@@ -90,8 +92,8 @@ public class SshConnectionManager {
         }
     }
 
+    // TODO: ПОЧИНИТЬ ХОЛОСТОЙ ЦИКЛ!!!
     private static String readChannelOutput(Channel channel) {
-
         byte[] buffer = new byte[1024];
         StringBuilder output = new StringBuilder();
         try {
