@@ -9,7 +9,7 @@ import java.io.PrintStream;
 import java.util.List;
 import java.util.Properties;
 
-public class SshConnectionManager {
+public class SshConnectionManager implements AutoCloseable {
 
     private Session session;
     private ChannelShell channel;
@@ -18,7 +18,8 @@ public class SshConnectionManager {
     private final String hostname;
     // Тайм-аут соединения
     // TODO: сделать его динамическим (user-defined)
-    private static final long TIMEOUT = 1000L;
+    private static final long TIMEOUT = 100L;
+    private boolean isConnected;
 
     public SshConnectionManager(String username, String password, String hostname) {
         this.username = username;
@@ -27,7 +28,7 @@ public class SshConnectionManager {
     }
 
     private Session getSession() throws IOException {
-        if (session == null || !session.isConnected()) {
+        if ((session == null || !session.isConnected()) && isConnected) {
             try {
                 session = connect(this, hostname, username, password);
             } catch (RuntimeException e) {
@@ -38,7 +39,7 @@ public class SshConnectionManager {
     }
 
     private Channel getChannel() throws IOException {
-        if (channel == null || !channel.isConnected()) {
+        if ((channel == null || !channel.isConnected()) && isConnected) {
             try {
                 channel = (ChannelShell) getSession().openChannel("shell");
                 channel.connect();
@@ -73,16 +74,15 @@ public class SshConnectionManager {
 
     public static String executeCommands(List<String> commands, SshConnectionManager sshConnectionManager) throws IOException {
         Channel channel = sshConnectionManager.getChannel();
-        System.out.println("Sending commands...");
+        System.out.printf("Sending commands...%s%n", commands);
         sendCommands(channel, commands);
-        System.out.println("Finished sending commands!");
+        System.out.println("Commands sent successfully!");
         return readChannelOutput(channel);
     }
 
     private static void sendCommands(Channel channel, List<String> commands) {
         try {
             PrintStream out = new PrintStream(channel.getOutputStream());
-            ;
             for (String command : commands) {
                 out.println(command);
             }
@@ -92,7 +92,7 @@ public class SshConnectionManager {
         }
     }
 
-    // TODO: ПОЧИНИТЬ ХОЛОСТОЙ ЦИКЛ!!!
+    // Тут есть холостой цикл, но как считывать
     private static String readChannelOutput(Channel channel) {
         byte[] buffer = new byte[1024];
         StringBuilder output = new StringBuilder();
@@ -107,7 +107,7 @@ public class SshConnectionManager {
                         break;
                     }
                     line = new String(buffer, 0, i);
-                    System.out.println(line);
+                    line = line.replaceAll("\u001B\\[[;\\d]*m", "");
                     output.append(line);
                     startTime = System.currentTimeMillis();
                 }
@@ -122,14 +122,11 @@ public class SshConnectionManager {
                 if (channel.isClosed()) {
                     break;
                 }
-                try {
-                    Thread.sleep(1000);
-                } catch (Exception ee) {
-                }
             }
         } catch (Exception e) {
             System.out.println("Error while reading channel output: " + e);
         }
+        System.out.println(output);
         return output.toString();
     }
 
@@ -138,6 +135,7 @@ public class SshConnectionManager {
         session.disconnect();
         this.channel = null;
         this.session = null;
+        this.isConnected = false;
         System.out.println("Disconnected channel and session");
     }
 
@@ -151,5 +149,13 @@ public class SshConnectionManager {
 
     public String getHostname() {
         return hostname;
+    }
+
+    public boolean isConnected() {
+        return isConnected;
+    }
+
+    public void setConnected(boolean connected) {
+        isConnected = connected;
     }
 }
